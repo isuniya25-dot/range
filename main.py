@@ -21,7 +21,7 @@ import html
 BOT_TOKEN = "8708045547:AAER7gCS-IhbrdV_pcZV_UtxqqPgxdw28rA"
 CHAT_ID = "-1003694423366"  
 API_KEY = "MRKVD1UFXWP"     
-API_URL = "https://api.2oo9.cloud/MXS47FLFX0U/tnevs/@public/api/liveaccess"
+API_URL = "https://api.2oo9.cloud/MXS47FLFX0U/tnevs/@public/api/console"
 CHECK_INTERVAL = 1       
 
 sent_messages = set()
