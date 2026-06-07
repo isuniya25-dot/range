@@ -18,16 +18,18 @@ import time
 import html
 
 # --- আপনার কনফিগারেশন ---
-BOT_TOKEN = "8708045547:AAER7gCS-IhbrdV_pcZV_UtxqqPgxdw28rA"
+BOT_TOKEN = "8708045547:AAHnxtqA2sRAhOQm-qLrhGQ5LaQEJX5cRSs"
 CHAT_ID = "-1003694423366"  
 API_KEY = "MRKVD1UFXWP"     
-API_URL = "https://api.2oo9.cloud/MXS47FLFX0U/tnevs/@public/api"
-CHECK_INTERVAL = 1       
+API_URL = "https://api.2oo9.cloud/MXS47FLFX0U/tnevs/@public/api/console"
+CHECK_INTERVAL = 3       
+SMS_LIFETIME = 120  # এখানে ২ মিনিট (১২০ সেকেন্ড) সেট করা হয়েছে ⏱️
 
 sent_messages = set()
-is_first_run = True  # প্রথমবার পুরনো মেসেজগুলো ইগনোর করার জন্য
+active_telegram_messages = [] # গ্রুপের মেসেজ আইডি ও সময় ট্র্যাক করার জন্য লিস্ট
+is_first_run = True  
 
-# পৃথিবীর প্রায় সব দেশের কলিং কোড ও পতাকার ডিকশনারি
+# পৃথিবীর প্রায় সব দেশের কলিং কোড ও পতাকার ডিকশনারি
 COUNTRY_CODES = {
     "1": "🇺🇸/🇨🇦 USA/Canada", "7": "🇷🇺/🇰🇿 Russia/Kazakhstan", "20": "🇪🇬 Egypt", 
     "27": "🇿🇦 South Africa", "30": "🇬🇷 Greece", "31": "🇳🇱 Netherlands", "32": "🇧🇪 Belgium", 
@@ -113,11 +115,9 @@ def get_console_data():
         print(f"❌ Network Error: {e}")
     return []
 
-# country_name_only আর্গুমেন্টটি এখানে রিসিভ করা হচ্ছে
 def send_to_telegram(text, range_num, country_name_only):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     
-    # ইনলাইন কীবোর্ডে এখন ফ্ল্যাগ ছাড়া শুধু দেশের নাম কপি হবে
     reply_markup = {
         "inline_keyboard": [
             [
@@ -136,10 +136,44 @@ def send_to_telegram(text, range_num, country_name_only):
     }
     try:
         response = requests.post(url, json=payload)
-        return response.status_code == 200
+        if response.status_code == 200:
+            resp_data = response.json()
+            return resp_data.get("result", {}).get("message_id")
+        return None
     except Exception as e:
         print(f"❌ Request Error: {e}")
+        return None
+
+def delete_telegram_message(message_id):
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/deleteMessage"
+    payload = {
+        "chat_id": CHAT_ID,
+        "message_id": message_id
+    }
+    try:
+        res = requests.post(url, json=payload)
+        return res.status_code == 200
+    except Exception as e:
+        print(f"❌ Delete Error: {e}")
         return False
+
+def clean_expired_messages():
+    """২ মিনিট পুরনো মেসেজ গ্রুপ থেকে ডিলিট করার ফাংশন"""
+    global active_telegram_messages
+    current_time = time.time()
+    remaining_messages = []
+
+    for msg in active_telegram_messages:
+        if current_time - msg["sent_at"] >= SMS_LIFETIME:
+            success = delete_telegram_message(msg["message_id"])
+            if success:
+                print(f"🗑️ Automatically removed message ID: {msg['message_id']} after 2 minutes.")
+            else:
+                print(f"⚠️ Could not delete message ID: {msg['message_id']}")
+        else:
+            remaining_messages.append(msg)
+            
+    active_telegram_messages = remaining_messages
 
 def main():
     global is_first_run
@@ -164,7 +198,6 @@ def main():
                     safe_message = html.escape(raw_message)
                     country_info = get_country_info(range_num)
                     
-                    # ফ্ল্যাগ ও দেশের নাম আলাদা করা হচ্ছে (প্রথম স্পেসের পরের অংশটুকু দেশের নাম)
                     country_name_only = country_info.split(" ", 1)[1] if " " in country_info else country_info
                     
                     formatted_msg = (
@@ -174,17 +207,20 @@ def main():
                         f"<blockquote>✉️ Full SMS: {safe_message}</blockquote>"
                     )
                     
-                    # send_to_telegram এ country_name_only পাঠানো হচ্ছে
-                    if send_to_telegram(formatted_msg, range_num, country_name_only):
+                    msg_id = send_to_telegram(formatted_msg, range_num, country_name_only)
+                    if msg_id:
                         sent_messages.add(msg_time)
-                        print(f"✅ Fast Forwarded Range: {range_num}")
+                        active_telegram_messages.append({"message_id": msg_id, "sent_at": time.time()})
+                        print(f"✅ Fast Forwarded Range: {range_num} (ID: {msg_id})")
                     else:
                         print(f"⚠️ Failed to forward Range: {range_num}")
         
         if is_first_run:
-            print("✅ Sync complete. Monitoring for NEW messages every 1 seconds...")
+            print(f"✅ Sync complete. Messages will be auto-removed after {SMS_LIFETIME} seconds (2 mins).")
             is_first_run = False
             
+        clean_expired_messages()
+        
         if len(sent_messages) > 1000:
             sent_messages.clear()
             
