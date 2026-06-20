@@ -1,4 +1,19 @@
 import os
+import threading
+from flask import Flask
+
+# --- FLASK SERVER SETUP FOR RENDER (ADDED BY MINOX AUTO SETUP) ---
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Bot is successfully running on Render!"
+
+def run_server():
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host="0.0.0.0", port=port)
+
+import os
 import re
 import html as html_mod
 import threading
@@ -497,6 +512,11 @@ def main():
 # ============================================================
 
 if __name__ == "__main__":
+    # --- Start Flask Server in Background ---
+    server_thread = threading.Thread(target=run_server)
+    server_thread.daemon = True
+    server_thread.start()
+
     # Flask server (background) — Render keep-alive
     threading.Thread(target=run_server, daemon=True).start()
 
