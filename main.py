@@ -1,19 +1,4 @@
 import os
-import threading
-from flask import Flask
-
-# --- FLASK SERVER SETUP FOR RENDER (ADDED BY MINOX AUTO SETUP) ---
-app = Flask(__name__)
-
-@app.route('/')
-def home():
-    return "Bot is successfully running on Render!"
-
-def run_server():
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host="0.0.0.0", port=port)
-
-import os
 import re
 import html as html_mod
 import threading
@@ -35,7 +20,17 @@ def home():
 
 def run_server():
     port = int(os.environ.get("PORT", 8080))
-    app.run(host="0.0.0.0", port=port)
+    try:
+        app.run(host="0.0.0.0", port=port)
+    except OSError as e:
+        print(f"⚠️  Flask server failed to start (port {port} in use?): {e}")
+        for fallback in [8081, 8082, 5050, 9000]:
+            try:
+                print(f"🔄  Trying fallback port {fallback}...")
+                app.run(host="0.0.0.0", port=fallback)
+                break
+            except OSError:
+                continue
 
 # ============================================================
 # CONFIG
@@ -54,8 +49,7 @@ SMS_LIFETIME   = 21600    # 6 hours auto-delete
 # ============================================================
 
 bot = telebot.TeleBot(BOT_TOKEN)
-sent_messages: set      = set()
-active_msgs: list       = []   # [{message_id, sent_at}]
+sent_messages: list     = []   # ordered list — used for dedup + bounded trim
 is_first_run: bool      = True
 
 # ============================================================
@@ -394,12 +388,18 @@ def send_to_telegram(raw_message: str, range_num: str, sid: str):
     markup.row(btn_rang, btn_country)
 
     # Row 3 — NUMBER BOT (premium bot-logo icon, danger/red)
-    btn_bot = InlineKeyboardButton(
-        text="  NUMBER BOT",
-        url=BOT_LINK,
-        icon_custom_emoji_id="4943094697238201446",
-        style="danger"
-    )
+    try:
+        btn_bot = InlineKeyboardButton(
+            text="  NUMBER BOT",
+            url=BOT_LINK,
+            icon_custom_emoji_id="4943094697238201446",
+            style="danger"
+        )
+    except Exception:
+        btn_bot = InlineKeyboardButton(
+            text="🤖  NUMBER BOT",
+            url=BOT_LINK
+        )
     markup.add(btn_bot)
 
     # ── Send with flood-protection retry ────────────────────
@@ -477,7 +477,7 @@ def main():
                         continue
 
                     if is_first_run:
-                        sent_messages.add(msg_time)
+                        sent_messages.append(msg_time)
                         continue
 
                     raw_msg  = hit.get("message", "")
@@ -486,7 +486,7 @@ def main():
 
                     ok = send_to_telegram(raw_msg, range_n, sid)
                     if ok:
-                        sent_messages.add(msg_time)
+                        sent_messages.append(msg_time)
                     else:
                         print(f"⚠️  Failed to forward range: {range_n}")
 
@@ -497,10 +497,9 @@ def main():
         except Exception as e:
             print(f"⚠️  Poll error: {e}")
 
+        # Trim oldest entries first (list preserves insertion order)
         if len(sent_messages) > 2000:
-            oldest = list(sent_messages)[:1000]
-            for item in oldest:
-                sent_messages.discard(item)
+            del sent_messages[:1000]
 
         elapsed   = time.time() - start
         sleep_for = max(0, CHECK_INTERVAL - elapsed)
@@ -512,11 +511,6 @@ def main():
 # ============================================================
 
 if __name__ == "__main__":
-    # --- Start Flask Server in Background ---
-    server_thread = threading.Thread(target=run_server)
-    server_thread.daemon = True
-    server_thread.start()
-
     # Flask server (background) — Render keep-alive
     threading.Thread(target=run_server, daemon=True).start()
 
