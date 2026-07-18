@@ -40,8 +40,8 @@ BOT_TOKEN      = "8428676204:AAHw7_F9lVL2Lr7zRW1FDqAc8wSJ6n5Hn6g"
 CHAT_ID        = "-1003694423366"
 API_KEY        = "MRKVD1UFXWP"
 API_URL        = "https://api.2oo9.cloud/MXS47FLFX0U/tnevs/@public/api/console"
-BOT_LINK       = "https://t.me/xpennel_bot"
-CHECK_INTERVAL = 2        # seconds between polls
+BOT_LINK       = "https://t.me/rmxel2_bot"
+CHECK_INTERVAL = 4        # seconds between polls
 SMS_LIFETIME   = 21600    # 6 hours auto-delete
 
 # ============================================================
